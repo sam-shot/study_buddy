@@ -46,16 +46,11 @@ app.post('/prompt', async (req, res) => {
   const supabase = getSupabaseClient(req.headers.authorization)
   try {
 
-    const { data: courseData, error: courseError } = await supabase
-      .from('Courses')
-      .select('id')
-      .eq('id', course_id)
-      .single();
-
-    if (courseError || !courseData) {
-      return res.status(404).json({ message: "Course not found" });
-    }
-
+    
+    const { data: files, error: filesError } = await supabase
+      .from('Files')
+      .select('file_id,file_mime')
+      .eq('course_id', course_id);
 
     const { error: insertError } = await supabase
       .from('History')
@@ -79,17 +74,44 @@ app.post('/prompt', async (req, res) => {
     }
 
 
-    let contents = history.map(e => ({
-      "role": e.is_user ? "user" : "model",
-      "parts": [
-        e.text ? { "text": e.text } : {
-          fileData: {
-            mimeType: e.file_mime,
-            fileUri: e.file_id,
+    let contents: {}[] = []
+    if (!filesError || files) {
+      files.forEach((e: { file_mime: any; file_id: any; }) => {
+        contents.push(
+          {
+            "role": "user",
+            "parts": [
+              {
+                fileData: {
+                  mimeType: e.file_mime,
+                  fileUri: e.file_id,
+                },
+              },
+            ]
           },
+        )
+      });
+
+    }
+    history.forEach((e: { is_user: any; text: null; file_mime: any; file_id: any; }) => {
+      contents.push(
+        {
+          "role": e.is_user ? "user" : "model",
+          "parts": [
+            e.text != null ?
+              {
+                "text": e.text
+              } :
+              {
+                fileData: {
+                  mimeType: e.file_mime,
+                  fileUri: e.file_id,
+                },
+              },
+          ]
         },
-      ]
-    }));
+      )
+    });
 
     const genAI = new GoogleGenerativeAI(GEM_API);
     const model = genAI.getGenerativeModel({
