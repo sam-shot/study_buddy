@@ -2,3 +2,8 @@
 .branches
 .temp
 .env
+
+
+.my.env
+/migrations/
+/functions/login
